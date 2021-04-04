@@ -4,7 +4,7 @@
 #include <memory>
 
 struct event_base;
-class SignalHandler;
+class SignalHandlerThread;
 
 class EventApplication {
 
@@ -20,7 +20,7 @@ public:
 
 private:
   struct event_base *base_;
-  std::unique_ptr<SignalHandler> signalHandler;
+  std::unique_ptr<SignalHandlerThread> signalHandler;
 };
 
 #endif

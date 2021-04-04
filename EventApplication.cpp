@@ -1,6 +1,5 @@
 #include "EventApplication.h"
 
-#include <atomic>
 #include <future>
 #include <iostream>
 #include <thread>
@@ -13,57 +12,57 @@
 #include "event2/event.h"
 #include "event2/thread.h"
 
-class SignalHandler;
-// we need a global variable in the signal handler
-static SignalHandler *event_application_signal_handler;
 // list of signal handled by the application
 static const std::vector<int> event_application_signals{SIGINT, SIGTERM};
 
-class SignalHandler {
+class SignalHandlerThread {
 
 public:
-  SignalHandler(struct event_base *base, sigset_t *oset) {
-    event_application_signal_handler = this;
-    handlerThread_ =
-        std::thread([this](struct event_base *base,
-                           sigset_t *oset) { this->run_(base, oset); },
-                    base, oset);
+  SignalHandlerThread(struct event_base *base, sigset_t *oset) {
+    handlerThread_ = std::thread(SignalHandlerThread::run_, this, base, oset);
+    // make sure the thread is started
+    start_.get_future().wait();
   }
 
-  void stop(int signal = 0) {
-    if (signal_ < 0) {
-      signal_ = signal;
-      stop_.set_value();
-    }
+  SignalHandlerThread(const SignalHandlerThread &) = delete;
+  SignalHandlerThread &operator=(const SignalHandlerThread &) = delete;
+
+  void wait() {
+    start_.set_value();
+    stop_.get_future().wait();
   }
 
-  ~SignalHandler() {
-    stop();
+  ~SignalHandlerThread() {
+    stop_.set_value();
     handlerThread_.join();
   }
 
 private:
-  void run_(struct event_base *base, sigset_t *oset) {
+  static void run_(SignalHandlerThread *thread, struct event_base *base,
+                   sigset_t *oset) {
     // restore the original mask in the handler thread
     if (pthread_sigmask(SIG_SETMASK, oset, nullptr) != 0) {
       std::cerr << "Failed to set sigmask" << std::endl;
     }
-
-    struct sigaction sa {};
-    sa.sa_handler = [](int i) { event_application_signal_handler->stop(i); };
-    sa.sa_mask = *oset;
+    // exit the loop if a signal is received
     for (const int si : event_application_signals) {
-      sigaction(si, &sa, nullptr);
+      struct event *ev = evsignal_new(
+          base, si,
+          [](evutil_socket_t, short, void *arg) {
+            event_base_loopbreak(static_cast<struct event_base *>(arg));
+          },
+          base);
+      if (ev) {
+        event_add(ev, NULL);
+      }
     }
-    stop_.get_future().wait();
-    if (signal_ > 0) {
-      event_base_loopbreak(base);
-    }
+    // just wait until it is destroyed
+    thread->wait();
   }
 
   std::thread handlerThread_;
   std::promise<void> stop_;
-  std::atomic<int> signal_{-1};
+  std::promise<void> start_;
 };
 
 EventApplication::EventApplication() {
@@ -85,7 +84,7 @@ EventApplication::EventApplication() {
     base_ = event_base_new();
 
     // start the thread that will handle the signals
-    signalHandler = std::make_unique<SignalHandler>(base_, &oset);
+    signalHandler = std::make_unique<SignalHandlerThread>(base_, &oset);
 
   } else {
     std::cerr << "Failed to init libevent." << std::endl;
