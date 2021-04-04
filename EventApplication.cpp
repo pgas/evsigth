@@ -1,8 +1,8 @@
 #include "EventApplication.h"
 
-#include <condition_variable>
+#include <atomic>
+#include <future>
 #include <iostream>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -22,7 +22,7 @@ static const std::vector<int> event_application_signals{SIGINT, SIGTERM};
 class SignalHandler {
 
 public:
-  SignalHandler(struct event_base *base, sigset_t *oset) : ending_{false} {
+  SignalHandler(struct event_base *base, sigset_t *oset) {
     event_application_signal_handler = this;
     handlerThread_ =
         std::thread([this](struct event_base *base,
@@ -31,12 +31,10 @@ public:
   }
 
   void stop(int signal = 0) {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      ending_ = true;
+    if (signal_ < 0) {
       signal_ = signal;
+      stop_.set_value();
     }
-    cv_.notify_one();
   }
 
   ~SignalHandler() {
@@ -57,18 +55,15 @@ private:
     for (const int si : event_application_signals) {
       sigaction(si, &sa, nullptr);
     }
-    std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [this] { return ending_ || signal_ > 0; });
+    stop_.get_future().wait();
     if (signal_ > 0) {
       event_base_loopbreak(base);
     }
   }
 
   std::thread handlerThread_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
-  bool ending_;
-  int signal_;
+  std::promise<void> stop_;
+  std::atomic<int> signal_{-1};
 };
 
 EventApplication::EventApplication() {
