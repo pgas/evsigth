@@ -5,9 +5,7 @@
 #include <thread>
 #include <vector>
 
-#include <pthread.h>
 #include <signal.h>
-#include <unistd.h>
 
 #include "event2/event.h"
 #include "event2/thread.h"
