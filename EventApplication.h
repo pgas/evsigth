@@ -2,8 +2,10 @@
 #define EVENT_APPLICATION_H
 
 #include <memory>
+#include <vector>
 
 struct event_base;
+struct event;
 class SignalHandlerThread;
 
 class EventApplication {
@@ -20,6 +22,7 @@ public:
 
 private:
   struct event_base *base_;
+  std::vector<struct event *> signalEvents;
   std::unique_ptr<SignalHandlerThread> signalHandler_;
 };
 

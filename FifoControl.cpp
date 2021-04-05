@@ -24,6 +24,7 @@ FifoControl::~FifoControl() {
   }
   if (evFifo_) {
     event_del(evFifo_);
+    event_free(evFifo_);
   }
   unlink(name_);
 }
@@ -45,6 +46,7 @@ void readFifo_(evutil_socket_t fd, short event, void *arg) {
     }
   } else {
     event_del(this_->evFifo_);
+    event_free(this_->evFifo_);
     this_->evFifo_ = nullptr;
     if (len == 0) {
       // fifo was closed re-opening it

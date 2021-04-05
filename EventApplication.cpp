@@ -3,7 +3,6 @@
 #include <future>
 #include <iostream>
 #include <thread>
-#include <vector>
 
 #include <signal.h>
 
@@ -61,6 +60,7 @@ EventApplication::EventApplication() {
           base_);
       if (ev) {
         event_add(ev, NULL);
+        signalEvents.push_back(ev);
       }
     }
 
@@ -73,6 +73,10 @@ EventApplication::EventApplication() {
 }
 
 EventApplication::~EventApplication() {
+  for (auto ev : signalEvents) {
+    event_del(ev);
+    event_free(ev);
+  }
   if (base_) {
     event_base_free(base_);
     base_ = nullptr;
