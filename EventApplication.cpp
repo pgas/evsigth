@@ -21,22 +21,16 @@ public:
       if (pthread_sigmask(SIG_SETMASK, oset, nullptr) != 0) {
         std::cerr << "Failed to set sigmask" << std::endl;
       }
-      start_.set_value();
-      // just wait until it is destroyed
+      // just wait until this and stop are destroyed
       stop_.get_future().wait();
     }).detach();
-    // wait until the thread is started
-    start_.get_future().wait();
   }
 
   SignalHandlerThread(const SignalHandlerThread &) = delete;
   SignalHandlerThread &operator=(const SignalHandlerThread &) = delete;
 
-  ~SignalHandlerThread() { stop_.set_value(); }
-
 private:
   std::promise<void> stop_;
-  std::promise<void> start_;
 };
 
 EventApplication::EventApplication() {
@@ -73,7 +67,7 @@ EventApplication::EventApplication() {
     }
 
     // start the thread that will handle the signals
-    signalHandler = std::make_unique<SignalHandlerThread>(&oset);
+    signalHandler_ = std::make_unique<SignalHandlerThread>(&oset);
 
   } else {
     std::cerr << "Failed to init libevent." << std::endl;

@@ -20,7 +20,7 @@ public:
 
 private:
   struct event_base *base_;
-  std::unique_ptr<SignalHandlerThread> signalHandler;
+  std::unique_ptr<SignalHandlerThread> signalHandler_;
 };
 
 #endif
